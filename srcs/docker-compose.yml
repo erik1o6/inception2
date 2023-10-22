@@ -1,0 +1,163 @@
+version: '3.8'
+
+x-name: inception
+
+services:
+  nginx:
+    image: nginx
+    build: requirements/nginx/
+    networks:
+      - network
+    ports:
+      - "443:443"
+    volumes:
+      - wp-files:/var/www/aquesada.42.fr
+    depends_on:
+      - wordpress
+      - site
+      - qbittorrent-nox
+    container_name: nginx
+    restart: always
+
+  wordpress:
+    image: wordpress
+    build: requirements/wordpress/
+    networks:
+      - network
+    volumes:
+      - wp-files:/var/www/aquesada.42.fr
+    depends_on:
+      - mariadb
+      - redis
+    container_name: wordpress
+    restart: always
+    env_file:
+      - .env
+
+  mariadb:
+    image: mariadb
+    build: requirements/mariadb/
+    networks:
+      - network
+    volumes:
+      - wp-db:/var/lib/mysql
+    container_name: mariadb
+    restart: always
+    env_file:
+      - .env
+
+  redis:
+    image: redis
+    build: requirements/bonus/redis/
+    networks:
+      - network
+    container_name: redis
+    restart: always
+
+  vsftpd:
+    image: vsftpd
+    build: requirements/bonus/vsftpd/
+    networks:
+      - network
+    ports:
+      - "20:20"
+      - "21:21"
+      - "5000-5010:5000-5010"
+    volumes:
+      - wp-files:/var/www/aquesada.42.fr
+    container_name: vsftpd
+    restart: always
+    env_file:
+      - .env
+
+  adminer:
+    image: adminer
+    build: requirements/bonus/adminer/
+    networks:
+      - network
+    volumes:
+      - wp-files:/var/www/aquesada.42.fr
+    container_name: adminer
+    depends_on:
+      - wordpress
+
+  cadvisor:
+    image: cadvisor
+    build: requirements/bonus/cadvisor/
+    networks:
+      - network
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: always
+
+  site:
+    container_name: site
+    build: requirements/bonus/site/
+    restart: always
+    networks:
+      - network
+
+
+  qbittorrent-nox:
+    container_name: qbittorrent-nox
+    environment:
+      - PGID=1000
+      - PUID=1000
+      - TZ=Europe/Paris 
+    build: ./requirements/bonus/qBittorrent/
+    volumes:
+      - qbittorrent-data:/config  # configuration data, this path might need adjustment
+      - qbittorrent-downloads:/downloads  # downloaded files
+    networks:
+      - network
+    ports:
+      - "6881:6881"
+      - "6881:6881/udp"
+      - "8081:8081"
+    restart: always
+    tmpfs:
+      - /tmp
+    tty: true
+
+
+volumes:
+  wp-files:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/$USER/data/wp-files/'
+
+  wp-db:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/home/$USER/data/wp-db/'
+
+  qbittorrent-downloads:
+    name: qbittorrent-downloads
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/$USER/data/downloads
+  qbittorrent-data:
+    name: qbittorrent-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/$USER/data/qbittorrent
+
+networks:
+  network:
+    driver: bridge
+
